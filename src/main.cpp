@@ -1,7 +1,5 @@
 #include <Arduino.h>
 #include <Ethernet.h>
-#include <EthernetUdp.h>
-#include <Udp.h>
 #include <SPI.h>
 #include <MicroROS_Transport.h>
 #include <rcl/rcl.h>
@@ -34,24 +32,32 @@ EthernetUDP udp;
 void error_loop();                                                                          
 void timer_callback(rcl_timer_t * timer, int64_t last_call_time);
 void CreateEntities();
-void SubscriptionCallback();
+void SubscriptionCallback(const void * msgin);
+
 #define RCCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){error_loop();}}     // Checks for Errors in Micro ROS Setup
 #define RCSOFTCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){}}              // 
 
 
 // Network Configuration
 byte esp_mac[] = { 0xDE, 0xAD, 0xAF, 0x91, 0x3E, 0xD7 };    // Mac address of ESP32
-IPAddress esp_ip(192, 168, 1, 200);                         // IP address of ESP32
-IPAddress agent_ip(192, 168, 1, 10);                        // IP address of Micro ROS agent        
+IPAddress esp_ip(192, 168, 0, 108);                         // IP address of ESP32
+IPAddress agent_ip(192, 168, 0, 30);                        // IP address of Micro ROS agent        
 size_t agent_port = 8888;                                   // Micro ROS Agent Port Number
 
 
-// ROS Node Configurations
-const char* NodeName = "micro_ros_esp_node";
-const char* PublisherTopic = "micro_ros_esp_publisher";
+// ROS Node 1 Configurations (Setup for the First ESP32)
+const char* NodeName = "micro_ros_node1";
+const char* PublishTopic = "node1_topic";
+const char* ReceiveTopic = "node2_topic";
 const int ExecutorTimeout = 100;  // ms
 const unsigned int TimerTimeout = 1000;
 
+// ROS Node 2 Configurations (Setup for the Second ESP32)
+// const char* NodeName = "micro_ros_node2";
+// const char* PublishTopic = "node2_topic";
+// const char* ReceiveTopic = "node1_topic";
+// const int ExecutorTimeout = 100;  // ms
+// const unsigned int TimerTimeout = 1000;
 
 void setup() {
 
@@ -71,7 +77,7 @@ void setup() {
   set_microros_eth_transports(esp_mac, esp_ip, agent_ip, agent_port);
   delay(2000);
 
-  // Initialise the Publisher
+  // Initialise the Publisher and Subscriber
   CreateEntities();
 
 }
@@ -94,7 +100,9 @@ void error_loop() {
 
 
 void timer_callback(rcl_timer_t * timer, int64_t last_call_time) {
+
   RCLC_UNUSED(last_call_time);
+
   if (timer != NULL) {
     RCSOFTCHECK(rcl_publish(&publisher, &msg, NULL));
     msg.data++;
@@ -118,26 +126,26 @@ void CreateEntities() {
 
 
   // create publisher
-  RCCHECK(rclc_publisher_init_default(
+  RCCHECK(rclc_publisher_init_best_effort(
     &publisher,
     &node,
     ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
-    PublisherTopic)
+    PublishTopic)
   );
 
   // Create Subscriber
-  RCCHECK(rclc_subscription_init_default(
+  RCCHECK(rclc_subscription_init_best_effort(
     &subscriber,
     &node,
     ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
-    PublisherTopic
-  ))
+    ReceiveTopic
+  ));
 
   // create timer,
   RCCHECK(rclc_timer_init_default(
     &timer,
     &support,
-    RCL_MS_TO_NS(timer_timeout),
+    RCL_MS_TO_NS(TimerTimeout),
     timer_callback)
   );
 
@@ -152,6 +160,7 @@ void CreateEntities() {
 
 }
 
+// Define Subscription Callback (If received a new value...)
 void SubscriptionCallback(const void * msgin) {
   const std_msgs__msg__Int32 * msg = (const std_msgs__msg__Int32 *)msgin;
   Serial.print("[SUB] Received: ");
