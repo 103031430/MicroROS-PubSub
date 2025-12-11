@@ -38,11 +38,11 @@ struct micro_ros_agent_locator {
 	int port;
 };
 
-static inline void set_microros_eth_transports(byte mac[], IPAddress client_ip, IPAddress agent_ip, uint16_t agent_port){
+static inline void set_microros_eth_transports(byte mac[], IPAddress client_ip, IPAddress dns, IPAddress gateway, IPAddress agent_ip, uint16_t agent_port){
 
 	static struct micro_ros_agent_locator locator;
 
-   	Ethernet.begin(mac, client_ip);
+   	Ethernet.begin(mac, client_ip, dns, gateway);
 	delay(1000);
 
 	locator.address = agent_ip;
